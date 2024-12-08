@@ -34,7 +34,7 @@ export const sendNotification = async (playerId, title, message, additionalData 
 
     // Send notification through OneSignal
     const response = await axios.post(
-      'https://onesignal.com/api/v1/notifications',
+      'https://api.onesignal.com/v1/notifications',
       {
         app_id: process.env.ONESIGNAL_APP_ID,
         include_player_ids: [playerId],
@@ -44,7 +44,7 @@ export const sendNotification = async (playerId, title, message, additionalData 
       },
       {
         headers: {
-          'Authorization': `Basic ${process.env.ONESIGNAL_REST_API_KEY}`,
+          'Authorization': `Bearer ${process.env.ONESIGNAL_REST_API_KEY}`,
           'Content-Type': 'application/json'
         }
       }
