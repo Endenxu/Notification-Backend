@@ -87,22 +87,50 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
   try {
     const { receiverId, senderId, fileName, fileId, additionalData } = req.body;
 
-    if (!receiverId || !senderId || !fileName || !fileId) {
+    // Validate required fields
+    if (!receiverId || !senderId || !fileName || !fileId || !additionalData) {
+      console.error("Missing required fields:", {
+        receiverId,
+        senderId,
+        fileName,
+        fileId,
+      });
       return res.status(400).json({
         success: false,
         error: "Missing required fields",
+        details: {
+          receiverId: !receiverId,
+          senderId: !senderId,
+          fileName: !fileName,
+          fileId: !fileId,
+          additionalData: !additionalData,
+        },
       });
     }
 
+    // Find receiver's device
     const receiverDevice = await Device.findOne({ userId: receiverId });
     if (!receiverDevice) {
+      console.error("Receiver device not found for userId:", receiverId);
       return res.status(404).json({
         success: false,
         error: "Receiver device not found",
+        details: { receiverId },
       });
     }
 
-    // Enhanced notification data with required flags
+    // Validate owner details
+    if (
+      !additionalData.ownerDetails?.ownerUser ||
+      !additionalData.ownerDetails?.authRequiredFromUser
+    ) {
+      console.error("Missing owner details in additionalData");
+      return res.status(400).json({
+        success: false,
+        error: "Missing owner details in additionalData",
+      });
+    }
+
     const notificationData = {
       workflowId: additionalData.workflowId,
       fileId: additionalData.fileId,
@@ -111,41 +139,28 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
       description: additionalData.description,
       uploadDate: additionalData.uploadDate,
       ownerDetails: {
-        ownerUser: sanitizeUserData(additionalData.ownerDetails?.ownerUser),
+        ownerUser: sanitizeUserData(additionalData.ownerDetails.ownerUser),
         authRequiredFromUser: sanitizeUserData(
-          additionalData.ownerDetails?.authRequiredFromUser
+          additionalData.ownerDetails.authRequiredFromUser
         ),
       },
-      // Include all required fields for NotificationDetails screen
-      id: additionalData.workflowId,
-      fileUniqueCode: additionalData.uniqueCode,
-      fileDescription: additionalData.description,
-      startDate: additionalData.uploadDate,
-      responsibleName:
-        additionalData.ownerDetails?.authRequiredFromUser?.displayName || "",
-      responsibleArabicName:
-        additionalData.ownerDetails?.authRequiredFromUser?.arabicDisplayName ||
-        "",
-      fileOwnerName: additionalData.ownerDetails?.ownerUser?.displayName || "",
-      fileOwnerArabicName:
-        additionalData.ownerDetails?.ownerUser?.arabicDisplayName || "",
-      notes: "",
-      status: 0,
-      stepNumber: 1,
-      // Authorization flags
-      authRequired: true,
-      canForward: true,
-      canChangeResponsibleByManager: true,
-      canReject: true,
+      authRequired: additionalData.authRequired ?? true,
+      canForward: additionalData.canForward ?? true,
+      canChangeResponsibleByManager:
+        additionalData.canChangeResponsibleByManager ?? true,
+      canReject: additionalData.canReject ?? true,
+      status: additionalData.status ?? 0,
+      stepNumber: additionalData.stepNumber ?? 1,
+      notes: additionalData.notes ?? "",
     };
+
+    console.log(
+      "Preparing to send notification with data:",
+      JSON.stringify(notificationData, null, 2)
+    );
 
     const title = "New Document Authentication Required";
     const message = `Document "${fileName}" requires your authorization`;
-
-    console.log(
-      "Sending notification with data:",
-      JSON.stringify(notificationData, null, 2)
-    );
 
     const result = await sendNotification(
       receiverDevice.playerId,
@@ -154,12 +169,15 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
       notificationData
     );
 
+    console.log("Notification sent successfully:", result);
+
     res.json({ success: true, result });
   } catch (error) {
-    console.error("Error sending file upload notification:", error);
+    console.error("Error in notify-file-upload:", error);
     res.status(500).json({
       success: false,
       error: "Failed to send notification",
+      details: error.message,
     });
   }
 });
