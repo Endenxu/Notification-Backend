@@ -1,16 +1,5 @@
 import axios from "axios";
 
-// Sanitize user data helper function
-const sanitizeUser = (user) =>
-  user
-    ? {
-        id: user.id,
-        displayName: user.displayName,
-        arabicDisplayName: user.arabicDisplayName,
-      }
-    : null;
-
-// Main notification sending function
 export const sendNotification = async (
   playerId,
   title,
@@ -18,81 +7,85 @@ export const sendNotification = async (
   additionalData = {}
 ) => {
   try {
-    // Validate OneSignal configuration
-    if (!process.env.ONESIGNAL_APP_ID || !process.env.ONESIGNAL_REST_API_KEY) {
+    const apiKey = process.env.ONESIGNAL_REST_API_KEY;
+    const appId = process.env.ONESIGNAL_APP_ID;
+
+    // Log config (without exposing the full key)
+    console.log("OneSignal Configuration Check:", {
+      hasAppId: !!appId,
+      hasApiKey: !!apiKey,
+      appIdFirstChars: appId ? appId.substring(0, 6) + "..." : "missing",
+      apiKeyLength: apiKey ? apiKey.length : 0,
+    });
+
+    if (!appId || !apiKey) {
       throw new Error("OneSignal configuration missing");
     }
 
-    // Validate required inputs
     if (!playerId || !title || !message) {
       throw new Error("Missing required notification parameters");
     }
 
-    // Prepare notification data
-    const sanitizedData = {
-      ...additionalData,
-      authRequired: true,
-      canForward: true,
-      canChangeResponsibleByManager: true,
-      canReject: true,
-      status: additionalData.status || 0,
-      stepNumber: additionalData.stepNumber || 1,
+    const notificationPayload = {
+      app_id: appId,
+      include_player_ids: [playerId],
+      contents: { en: message },
+      headings: { en: title },
+      data: {
+        ...additionalData,
+        authRequired: true,
+        canForward: true,
+        canChangeResponsibleByManager: true,
+        canReject: true,
+        status: additionalData.status || 0,
+        stepNumber: additionalData.stepNumber || 1,
+      },
     };
 
-    // Log the request details (excluding sensitive info)
-    console.log("OneSignal request details:", {
+    console.log("Sending notification to OneSignal:", {
       playerId,
-      appId: process.env.ONESIGNAL_APP_ID,
       title,
-      message,
+      appId,
+      hasData: !!additionalData,
     });
 
-    // Send notification through OneSignal
-    const response = await axios.post(
-      "https://onesignal.com/api/v1/notifications",
-      {
-        app_id: process.env.ONESIGNAL_APP_ID,
-        include_player_ids: [playerId],
-        contents: { en: message },
-        headings: { en: title },
-        data: sanitizedData,
+    const response = await axios({
+      method: "post",
+      url: "https://api.onesignal.com/notifications", // New API endpoint
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`, // New Bearer token format
       },
-      {
-        headers: {
-          // REST API key is sent without 'Basic' prefix or base64 encoding
-          Authorization: process.env.ONESIGNAL_REST_API_KEY,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+      data: notificationPayload,
+    });
 
-    console.log("OneSignal API response:", response.data);
+    if (response.data.errors) {
+      throw new Error(
+        `OneSignal returned errors: ${JSON.stringify(response.data.errors)}`
+      );
+    }
 
+    console.log("OneSignal response:", response.data);
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
-      console.error("OneSignal API error details:", {
+      console.error("OneSignal request failed:", {
         status: error.response?.status,
         data: error.response?.data,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          headers: {
-            ...error.config?.headers,
-            Authorization: "[REDACTED]", // Don't log the actual key
-          },
-        },
+        message: error.message,
       });
 
-      if (error.response?.status === 401) {
-        console.error("Authentication failed. Please verify your REST API key");
+      // Check for specific error cases
+      if (error.response?.status === 403 || error.response?.status === 401) {
         throw new Error(
-          "OneSignal authentication failed - check your REST API key"
+          `OneSignal authentication failed (${
+            error.response.status
+          }): ${JSON.stringify(error.response.data)}`
         );
       }
     }
 
-    console.error("OneSignal API error:", error.message);
     throw error;
   }
 };
