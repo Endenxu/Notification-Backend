@@ -87,24 +87,20 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
   try {
     const { receiverId, senderId, fileName, fileId, additionalData } = req.body;
 
-    // Validate required fields
+    // Enhanced input validation
     if (!receiverId || !senderId || !fileName || !fileId || !additionalData) {
       console.error("Missing required fields:", {
-        receiverId,
-        senderId,
-        fileName,
-        fileId,
+        receiverId: !receiverId,
+        senderId: !senderId,
+        fileName: !fileName,
+        fileId: !fileId,
+        additionalData: !additionalData,
       });
       return res.status(400).json({
         success: false,
         error: "Missing required fields",
-        details: {
-          receiverId: !receiverId,
-          senderId: !senderId,
-          fileName: !fileName,
-          fileId: !fileId,
-          additionalData: !additionalData,
-        },
+        details:
+          "All fields (receiverId, senderId, fileName, fileId, additionalData) are required",
       });
     }
 
@@ -119,7 +115,16 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
       });
     }
 
-    // Validate owner details
+    if (!receiverDevice.playerId) {
+      console.error("No player ID found for device:", receiverDevice);
+      return res.status(400).json({
+        success: false,
+        error: "No OneSignal player ID found for receiver",
+        details: { receiverId },
+      });
+    }
+
+    // Validate and sanitize owner details
     if (
       !additionalData.ownerDetails?.ownerUser ||
       !additionalData.ownerDetails?.authRequiredFromUser
@@ -128,9 +133,11 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
       return res.status(400).json({
         success: false,
         error: "Missing owner details in additionalData",
+        details: "Both ownerUser and authRequiredFromUser are required",
       });
     }
 
+    // Enhanced notification data
     const notificationData = {
       workflowId: additionalData.workflowId,
       fileId: additionalData.fileId,
@@ -144,11 +151,11 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
           additionalData.ownerDetails.authRequiredFromUser
         ),
       },
-      authRequired: additionalData.authRequired ?? true,
-      canForward: additionalData.canForward ?? true,
-      canChangeResponsibleByManager:
-        additionalData.canChangeResponsibleByManager ?? true,
-      canReject: additionalData.canReject ?? true,
+      // Authorization flags
+      authRequired: true,
+      canForward: true,
+      canChangeResponsibleByManager: true,
+      canReject: true,
       status: additionalData.status ?? 0,
       stepNumber: additionalData.stepNumber ?? 1,
       notes: additionalData.notes ?? "",
@@ -162,21 +169,64 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
     const title = "New Document Authentication Required";
     const message = `Document "${fileName}" requires your authorization`;
 
-    const result = await sendNotification(
-      receiverDevice.playerId,
-      title,
-      message,
-      notificationData
-    );
+    try {
+      const result = await sendNotification(
+        receiverDevice.playerId,
+        title,
+        message,
+        notificationData
+      );
 
-    console.log("Notification sent successfully:", result);
+      console.log("Notification sent successfully:", result);
+      return res.json({
+        success: true,
+        result,
+        details: {
+          receiverId,
+          playerId: receiverDevice.playerId,
+          notificationType: "file_upload",
+        },
+      });
+    } catch (notificationError) {
+      console.error("Error sending notification:", notificationError);
 
-    res.json({ success: true, result });
+      // Check for specific OneSignal errors
+      if (notificationError.message.includes("authentication failed")) {
+        return res.status(401).json({
+          success: false,
+          error: "OneSignal authentication failed",
+          details: notificationError.message,
+        });
+      }
+
+      if (notificationError.message.includes("rate limit")) {
+        return res.status(429).json({
+          success: false,
+          error: "OneSignal rate limit exceeded",
+          details: notificationError.message,
+        });
+      }
+
+      if (notificationError.message.includes("Invalid notification payload")) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid notification payload",
+          details: notificationError.message,
+        });
+      }
+
+      // For other notification errors
+      return res.status(500).json({
+        success: false,
+        error: "Failed to send notification",
+        details: notificationError.message,
+      });
+    }
   } catch (error) {
     console.error("Error in notify-file-upload:", error);
     res.status(500).json({
       success: false,
-      error: "Failed to send notification",
+      error: "Internal server error",
       details: error.message,
     });
   }
