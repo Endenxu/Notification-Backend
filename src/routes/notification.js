@@ -45,6 +45,25 @@ router.post("/devices", validateRequest, async (req, res) => {
       { upsert: true, new: true }
     );
 
+    setTimeout(async () => {
+      try {
+        await sendNotification(
+          device.playerId,
+          "Welcome to TAMER APP",
+          "Thank you for joining us! We're glad to have you here.",
+          {
+            type: "welcome",
+            userId: device.userId,
+          }
+        );
+        console.log(
+          `Welcome notification sent to user ${userId} after 10-second delay`
+        );
+      } catch (notificationError) {
+        console.error("Error sending welcome notification:", notificationError);
+      }
+    }, 5000);
+
     res.json({
       success: true,
       device: {
