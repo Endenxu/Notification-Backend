@@ -24,7 +24,7 @@ const sanitizeUserData = (user) => {
 // Register or update device
 router.post("/devices", validateRequest, async (req, res) => {
   try {
-    const { userId, playerId, deviceInfo } = req.body;
+    const { userId, playerId, deviceInfo, language } = req.body;
 
     if (!userId || !playerId || !deviceInfo) {
       return res.status(400).json({
@@ -45,19 +45,40 @@ router.post("/devices", validateRequest, async (req, res) => {
       { upsert: true, new: true }
     );
 
+    // Welcome notification content based on language
+    const welcomeMessage = {
+      en: {
+        title: "Welcome to TAMER APP",
+        message: "Thank you for joining us! We're glad to have you here.",
+      },
+      ar: {
+        title: "مرحباً بك في تطبيق تمر",
+        message: "شكراً لانضمامك إلينا! نحن سعداء بوجودك هنا.",
+      },
+    };
+
+    // Use the specified language or default to English
+    const messageContent =
+      language && welcomeMessage[language]
+        ? welcomeMessage[language]
+        : welcomeMessage.en;
+
     setTimeout(async () => {
       try {
         await sendNotification(
           device.playerId,
-          "Welcome to TAMER APP",
-          "Thank you for joining us! We're glad to have you here.",
+          messageContent.title,
+          messageContent.message,
           {
             type: "welcome",
             userId: device.userId,
+            language: language || "en", // Include language in notification data
           }
         );
         console.log(
-          `Welcome notification sent to user ${userId} after 10-second delay`
+          `Welcome notification sent to user ${userId} after 5-second delay in ${
+            language || "en"
+          }`
         );
       } catch (notificationError) {
         console.error("Error sending welcome notification:", notificationError);
@@ -104,7 +125,8 @@ router.post("/notify", validateRequest, async (req, res) => {
 // Send file upload notification
 router.post("/notify-file-upload", validateRequest, async (req, res) => {
   try {
-    const { receiverId, senderId, fileName, fileId, additionalData } = req.body;
+    const { receiverId, senderId, fileName, fileId, additionalData, language } =
+      req.body;
 
     // Enhanced input validation
     if (!receiverId || !senderId || !fileName || !fileId || !additionalData) {
@@ -156,6 +178,24 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
       });
     }
 
+    // Define notification messages for different languages
+    const notificationMessages = {
+      en: {
+        title: "New Document Authentication Required",
+        message: `Document "${fileName}" requires your authorization`,
+      },
+      ar: {
+        title: "مطلوب مصادقة مستند جديد",
+        message: `المستند "${fileName}" يتطلب مصادقتك`,
+      },
+    };
+
+    // Use specified language or default to English
+    const messageContent =
+      language && notificationMessages[language]
+        ? notificationMessages[language]
+        : notificationMessages.en;
+
     // Enhanced notification data
     const notificationData = {
       workflowId: additionalData.workflowId,
@@ -178,6 +218,7 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
       status: additionalData.status ?? 0,
       stepNumber: additionalData.stepNumber ?? 1,
       notes: additionalData.notes ?? "",
+      language: language || "en", // Include language in notification data
     };
 
     console.log(
@@ -185,14 +226,11 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
       JSON.stringify(notificationData, null, 2)
     );
 
-    const title = "New Document Authentication Required";
-    const message = `Document "${fileName}" requires your authorization`;
-
     try {
       const result = await sendNotification(
         receiverDevice.playerId,
-        title,
-        message,
+        messageContent.title,
+        messageContent.message,
         notificationData
       );
 
