@@ -45,6 +45,7 @@ router.post("/devices", validateRequest, async (req, res) => {
       { upsert: true, new: true }
     );
 
+    /* Temporarily removed welcome notification
     // Welcome notification content based on language
     const welcomeMessage = {
       en: {
@@ -84,6 +85,7 @@ router.post("/devices", validateRequest, async (req, res) => {
         console.error("Error sending welcome notification:", notificationError);
       }
     }, 5000);
+     */
 
     res.json({
       success: true,
