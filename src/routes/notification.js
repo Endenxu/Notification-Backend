@@ -124,7 +124,6 @@ router.post("/notify", validateRequest, async (req, res) => {
 
     const defaultSoundOptions = {
       ios_sound: "notification.wav",
-      android_channel_id: "general_notifications",
     };
 
     const result = await sendNotification(
