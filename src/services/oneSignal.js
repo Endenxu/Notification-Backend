@@ -4,7 +4,8 @@ export const sendNotification = async (
   playerId,
   title,
   message,
-  additionalData = {}
+  additionalData = {},
+  soundOptions = {}
 ) => {
   try {
     const apiKey = process.env.ONESIGNAL_REST_API_KEY;
@@ -40,6 +41,11 @@ export const sendNotification = async (
         status: additionalData.status || 0,
         stepNumber: additionalData.stepNumber || 1,
       },
+      // Add sound options if provided
+      ...(soundOptions.ios_sound && { ios_sound: soundOptions.ios_sound }),
+      ...(soundOptions.android_channel_id && {
+        android_channel_id: soundOptions.android_channel_id,
+      }),
     };
 
     console.log("Sending notification to OneSignal:", {
@@ -47,15 +53,16 @@ export const sendNotification = async (
       title,
       appId,
       hasData: !!additionalData,
+      soundOptions: soundOptions, // Log sound options
     });
 
     const response = await axios({
       method: "post",
-      url: "https://api.onesignal.com/notifications", // New API endpoint
+      url: "https://api.onesignal.com/notifications",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`, // New Bearer token format
+        Authorization: `Bearer ${apiKey}`,
       },
       data: notificationPayload,
     });
@@ -69,6 +76,7 @@ export const sendNotification = async (
     console.log("OneSignal response:", response.data);
     return response.data;
   } catch (error) {
+    // Error handling (unchanged)
     if (axios.isAxiosError(error)) {
       console.error("OneSignal request failed:", {
         status: error.response?.status,
@@ -76,7 +84,6 @@ export const sendNotification = async (
         message: error.message,
       });
 
-      // Check for specific error cases
       if (error.response?.status === 403 || error.response?.status === 401) {
         throw new Error(
           `OneSignal authentication failed (${

@@ -46,7 +46,7 @@ router.post("/devices", validateRequest, async (req, res) => {
     );
 
     /* Temporarily removed welcome notification
-    // Welcome notification content based on language
+    // Welcome notification with sound options
     const welcomeMessage = {
       en: {
         title: "Welcome to TAMER APP",
@@ -64,6 +64,12 @@ router.post("/devices", validateRequest, async (req, res) => {
         ? welcomeMessage[language]
         : welcomeMessage.en;
 
+    // Default sound options for welcome message
+    const welcomeSoundOptions = {
+      ios_sound: "welcome.wav",
+      android_channel_id: "welcome_channel"
+    };
+
     setTimeout(async () => {
       try {
         await sendNotification(
@@ -73,8 +79,9 @@ router.post("/devices", validateRequest, async (req, res) => {
           {
             type: "welcome",
             userId: device.userId,
-            language: language || "en", // Include language in notification data
-          }
+            language: language || "en",
+          },
+          welcomeSoundOptions
         );
         console.log(
           `Welcome notification sent to user ${userId} after 5-second delay in ${
@@ -85,7 +92,7 @@ router.post("/devices", validateRequest, async (req, res) => {
         console.error("Error sending welcome notification:", notificationError);
       }
     }, 5000);
-     */
+    */
 
     res.json({
       success: true,
@@ -106,7 +113,7 @@ router.post("/devices", validateRequest, async (req, res) => {
 // Send notification
 router.post("/notify", validateRequest, async (req, res) => {
   try {
-    const { userId, title, message } = req.body;
+    const { userId, title, message, soundOptions } = req.body;
 
     const device = await Device.findOne({ userId });
     if (!device) {
@@ -114,7 +121,20 @@ router.post("/notify", validateRequest, async (req, res) => {
         .status(404)
         .json({ success: false, error: "Device not found" });
     }
-    const result = await sendNotification(device.playerId, title, message);
+
+    const defaultSoundOptions = {
+      ios_sound: "notification.wav",
+      android_channel_id: "general_notifications",
+    };
+
+    const result = await sendNotification(
+      device.playerId,
+      title,
+      message,
+      {},
+      soundOptions || defaultSoundOptions
+    );
+
     res.json({ success: true, result });
   } catch (error) {
     console.error("Error sending notification:", error);
@@ -127,8 +147,15 @@ router.post("/notify", validateRequest, async (req, res) => {
 // Send file upload notification
 router.post("/notify-file-upload", validateRequest, async (req, res) => {
   try {
-    const { receiverId, senderId, fileName, fileId, additionalData, language } =
-      req.body;
+    const {
+      receiverId,
+      senderId,
+      fileName,
+      fileId,
+      additionalData,
+      language,
+      soundOptions,
+    } = req.body;
 
     // Enhanced input validation
     if (!receiverId || !senderId || !fileName || !fileId || !additionalData) {
@@ -220,7 +247,7 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
       status: additionalData.status ?? 0,
       stepNumber: additionalData.stepNumber ?? 1,
       notes: additionalData.notes ?? "",
-      language: language || "en", // Include language in notification data
+      language: language || "en",
     };
 
     console.log(
@@ -229,11 +256,21 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
     );
 
     try {
+      // Default sound options for document notifications
+      const defaultSoundOptions = {
+        ios_sound: "document_alert.wav",
+        android_channel_id: "document_notifications",
+      };
+
+      // Use provided sound options or defaults
+      const finalSoundOptions = soundOptions || defaultSoundOptions;
+
       const result = await sendNotification(
         receiverDevice.playerId,
         messageContent.title,
         messageContent.message,
-        notificationData
+        notificationData,
+        finalSoundOptions
       );
 
       console.log("Notification sent successfully:", result);
@@ -244,6 +281,7 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
           receiverId,
           playerId: receiverDevice.playerId,
           notificationType: "file_upload",
+          soundOptions: finalSoundOptions,
         },
       });
     } catch (notificationError) {
