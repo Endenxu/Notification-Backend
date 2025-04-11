@@ -123,7 +123,7 @@ router.post("/notify", validateRequest, async (req, res) => {
     }
 
     const defaultSoundOptions = {
-      ios_sound: "notification.wav",
+      ios_sound: "document_alert.wav",
     };
 
     const result = await sendNotification(
@@ -258,7 +258,6 @@ router.post("/notify-file-upload", validateRequest, async (req, res) => {
       // Default sound options for document notifications
       const defaultSoundOptions = {
         ios_sound: "document_alert.wav",
-        android_channel_id: "document_notifications",
       };
 
       // Use provided sound options or defaults
